@@ -1,13 +1,7 @@
 package codes.dreaming.shared.client;
 
-import codes.dreaming.shared.client.packets.ClientDisconnectPacket;
-import codes.dreaming.shared.client.packets.ClientGuessPacket;
-import codes.dreaming.shared.client.packets.ClientLetterPacket;
-import codes.dreaming.shared.client.packets.ClientPacket;
-import codes.dreaming.shared.server.packets.ServerLetterPacket;
-import codes.dreaming.shared.server.packets.ServerPacket;
-import codes.dreaming.shared.server.packets.ServerStartPacket;
-import codes.dreaming.shared.server.packets.ServerWinPacket;
+import codes.dreaming.shared.client.packets.*;
+import codes.dreaming.shared.server.packets.*;
 import com.googlecode.lanterna.gui2.*;
 
 import java.io.IOException;
@@ -16,18 +10,19 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 public class Client implements Runnable {
-    final private MultiWindowTextGUI multiWindowTextGUI;
-
-    private Socket socket;
-
-    public ObjectInputStream input;
-    public ObjectOutputStream output;
+    private final MultiWindowTextGUI multiWindowTextGUI;
+    private ObjectInputStream input;
+    private ObjectOutputStream output;
+    private Label stateLabel;
 
     public Client(MultiWindowTextGUI gui, String host, Integer port) {
         this.multiWindowTextGUI = gui;
-        // Setup streams
+        setupStreams(host, port);
+    }
+
+    private void setupStreams(String host, Integer port) {
         try {
-            socket = new Socket(host, port);
+            Socket socket = new Socket(host, port);
             output = new ObjectOutputStream(socket.getOutputStream());
             input = new ObjectInputStream(socket.getInputStream());
         } catch (Exception e) {
@@ -37,14 +32,38 @@ public class Client implements Runnable {
 
     @Override
     public void run() {
+        BasicWindow window = createWindow();
+        multiWindowTextGUI.addWindow(window);
+        mainLoop(window);
+    }
+
+    private BasicWindow createWindow() {
         BasicWindow window = new BasicWindow("Client");
+        Panel contentPanel = createPanel(window);
+        window.setComponent(contentPanel);
+        return window;
+    }
 
+    private Panel createPanel(BasicWindow window) {
         Panel contentPanel = new Panel(new GridLayout(2));
+        this.stateLabel = new Label("Waiting for server to start...");
 
-        Label stateLabel = new Label("Waiting for server to start...");
+        Button disconnectButton = createDisconnectButton(window);
+        Label inputLabel = new Label("Enter a letter or guess:");
+        TextBox inputBox = new TextBox();
+        Button sendButton = createSendButton(inputBox);
 
-        // Add a button for disconnecting
-        Button disconnectButton = new Button("Disconnect", () -> {
+        contentPanel.addComponent(inputLabel);
+        contentPanel.addComponent(inputBox);
+        contentPanel.addComponent(sendButton);
+        contentPanel.addComponent(stateLabel);
+        contentPanel.addComponent(disconnectButton);
+
+        return contentPanel;
+    }
+
+    private Button createDisconnectButton(BasicWindow window) {
+        return new Button("Disconnect", () -> {
             try {
                 output.writeObject(new ClientDisconnectPacket());
                 window.close();
@@ -52,63 +71,65 @@ public class Client implements Runnable {
                 throw new RuntimeException(e);
             }
         });
+    }
 
-        Label inputLabel = new Label("Enter a letter or guess:");
-        TextBox inputBox = new TextBox();
-        Button send = new Button("Send", () -> {
+    private Button createSendButton(TextBox inputBox) {
+        return new Button("Send", () -> {
             String text = inputBox.getText();
-            if(text.length() == 1) {
-                try {
-                    output.writeObject(new ClientLetterPacket(text.charAt(0)));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }else {
-                try {
-                    output.writeObject(new ClientGuessPacket(text));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+            if (text.length() == 1) {
+                sendPacket(new ClientLetterPacket(text.charAt(0)));
+            } else {
+                sendPacket(new ClientGuessPacket(text));
             }
         });
-        contentPanel.addComponent(inputLabel);
-        contentPanel.addComponent(inputBox);
-        contentPanel.addComponent(send);
+    }
 
-        contentPanel.addComponent(stateLabel);
-        contentPanel.addComponent(disconnectButton);
+    private void sendPacket(ClientPacket packet) {
+        try {
+            output.writeObject(packet);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-        window.setComponent(contentPanel);
-
-        multiWindowTextGUI.addWindow(window);
+    private void mainLoop(BasicWindow window) {
         while (true) {
             try {
                 ServerPacket packet = (ServerPacket) input.readObject();
-
-                if(packet instanceof ServerStartPacket serverStartPacket) {
-                    stateLabel.setText("_".repeat(serverStartPacket.getWordLength()));
-                    System.out.println("Server started");
-                }else if (packet instanceof ServerLetterPacket letterPacket) {
-                    StringBuilder builder = new StringBuilder(stateLabel.getText());
-                    System.out.println("Got letter " + letterPacket.getLetter() + " at " + letterPacket.getIndex());
-                    for (Integer index : letterPacket.getIndex()) {
-                        builder.setCharAt(index, letterPacket.getLetter());
-                        System.out.println("Setting index " + index + " to " + letterPacket.getLetter());
-                    }
-                    stateLabel.setText(builder.toString());
-                }else if (packet instanceof ServerWinPacket winPacket) {
-                    if(winPacket.getYouWin()) {
-                        stateLabel.setText("You won!");
-                    }else {
-                        stateLabel.setText("You lost!");
-                    }
-                }
-
-
+                handleServerPacket(packet);
             } catch (ClassNotFoundException | IOException e) {
                 throw new RuntimeException(e);
             }
         }
+    }
 
+    private void handleServerPacket(ServerPacket packet) {
+        if (packet instanceof ServerStartPacket serverStartPacket) {
+            handleServerStartPacket(serverStartPacket);
+        } else if (packet instanceof ServerLetterPacket letterPacket) {
+            handleServerLetterPacket(letterPacket);
+        } else if (packet instanceof ServerWinPacket winPacket) {
+            handleServerWinPacket(winPacket);
+        }
+    }
+
+    private void handleServerStartPacket(ServerStartPacket packet) {
+        this.stateLabel.setText("_".repeat(packet.getWordLength()));
+    }
+
+    private void handleServerLetterPacket(ServerLetterPacket packet) {
+        StringBuilder builder = new StringBuilder(this.stateLabel.getText());
+        for (Integer index : packet.getIndex()) {
+            builder.setCharAt(index, packet.getLetter());
+        }
+        this.stateLabel.setText(builder.toString());
+    }
+
+    private void handleServerWinPacket(ServerWinPacket packet) {
+        if (packet.getYouWin()) {
+            stateLabel.setText("You won!");
+        } else {
+            stateLabel.setText("You lost!");
+        }
     }
 }
