@@ -11,77 +11,87 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Server implements Runnable {
-    final int port;
-    final int playerCount;
+    private static final boolean GAME_NOT_STARTED = false;
 
-    final String worldToGuess;
+    private final int port;
+    private final int playerCount;
 
-    private Boolean gameStarted = false;
+    private final String wordToGuess;
 
-    Set<ConnectionHandler> connections = ConcurrentHashMap.newKeySet();
+    private boolean gameStarted;
+
+    private final Set<ConnectionHandler> connections = ConcurrentHashMap.newKeySet();
 
 
-    public Server(int port, int playerCount, String worldToGuess) {
+    public Server(int port, int playerCount, String wordToGuess) {
         this.port = port;
         this.playerCount = playerCount;
-        this.worldToGuess = worldToGuess;
+        this.wordToGuess = wordToGuess;
+        this.gameStarted = GAME_NOT_STARTED;
     }
 
     public void startGame() {
         gameStarted = true;
     }
 
-    public Boolean isGameStarted() {
+    public boolean isGameStarted() {
         return gameStarted;
     }
 
     public ArrayList<Integer> checkLetter(char letter) {
-        System.out.println("Checking letter " + letter);
-        ArrayList<Integer> index = new ArrayList<>();
-        for (int i = 0; i < worldToGuess.length(); i++) {
-            if (worldToGuess.charAt(i) == letter) {
-                index.add(i);
-            }
-        }
-        System.out.println("Letter " + letter + " found at " + index);
-        return index;
+        ArrayList<Integer> indices = findLetterInWord(letter);
+        return indices;
     }
 
-    public Boolean checkWin(ConnectionHandler handler, String guess) {
-        System.out.println("Checking win for " + guess);
-        //Broadcast to all except the sender
-        this.broadcast(handler, new ServerWinPacket(guess.equals(worldToGuess)));
-        return guess.equals(worldToGuess);
+    public boolean checkWin(ConnectionHandler handler, String guess) {
+        boolean isWin = guess.equals(wordToGuess);
+        broadcastWinningInfo(handler, isWin);
+        return isWin;
     }
 
     public void run() {
-        try {
-            ServerSocket socket = new ServerSocket(port);
-
-            // On new connection accept it and add it to the list of connections
+        try (ServerSocket socket = new ServerSocket(port)) {
             while (true) {
                 Socket client = socket.accept();
-                ConnectionHandler handler = new ConnectionHandler(client, this);
-                connections.add(handler);
-                new Thread(handler).start();
-                if (connections.size() == playerCount) {
-                    startGame();
-                    this.broadcast(null, new ServerStartPacket(this.worldToGuess.length()));
-                }
+                handleNewConnection(client);
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
     }
 
+    public void removeConnection(ConnectionHandler handler) {
+        connections.remove(handler);
+    }
+
     public void broadcast(ConnectionHandler exclude, Object packet) {
-        System.out.println("Broadcasting packet " + packet.getClass().getSimpleName());
-        connections.stream().filter(connectionHandler -> connectionHandler != exclude).forEach(connectionHandler -> {
-            try {
-                connectionHandler.output.writeObject(packet);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+        connections.stream().
+                filter(connectionHandler -> connectionHandler != exclude).
+                forEach(connectionHandler -> connectionHandler.sendPacket(packet));
+    }
+
+    private ArrayList<Integer> findLetterInWord(char letter) {
+        ArrayList<Integer> index = new ArrayList<>();
+        for (int i = 0; i < wordToGuess.length(); i++) {
+            if (wordToGuess.charAt(i) == letter) {
+                index.add(i);
             }
-        });
+        }
+        return index;
+    }
+
+    private void broadcastWinningInfo(ConnectionHandler handler, boolean isWin) {
+        System.out.printf("Checking win for '%s'%n", isWin);
+        this.broadcast(handler, new ServerWinPacket(isWin));
+    }
+
+    private void handleNewConnection(Socket client) throws IOException {
+        ConnectionHandler handler = new ConnectionHandler(client, this);
+        connections.add(handler);
+        new Thread(handler).start();
+        if (connections.size() == playerCount) {
+            startGame();
+            this.broadcast(null, new ServerStartPacket(wordToGuess.length()));
+        }
     }
 }

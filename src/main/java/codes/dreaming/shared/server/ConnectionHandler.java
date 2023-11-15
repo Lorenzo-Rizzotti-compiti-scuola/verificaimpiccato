@@ -13,30 +13,41 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 public class ConnectionHandler implements Runnable {
-    final Socket socket;
-    final Server server;
-
-    public ObjectInputStream input;
-    public ObjectOutputStream output;
+    private final Socket socket;
+    private final Server server;
+    private final ObjectInputStream input;
+    private final ObjectOutputStream output;
 
     public ConnectionHandler(Socket socket, Server server) throws IOException {
         this.socket = socket;
         this.server = server;
-
-        // Setup streams
-        output = new ObjectOutputStream(socket.getOutputStream());
-        input = new ObjectInputStream(socket.getInputStream());
+        this.output = new ObjectOutputStream(socket.getOutputStream());
+        this.input = new ObjectInputStream(socket.getInputStream());
     }
 
     @Override
     public void run() {
-        System.out.println("New connection from " + socket.getInetAddress().getHostAddress());
-        // Accept packets from the client
+        try {
+            System.out.println("New connection from " + socket.getInetAddress().getHostAddress());
+            acceptPackets();
+        } finally {
+            try {
+                input.close();
+                output.close();
+                socket.close();
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to close resources.", e);
+            }
+        }
+    }
+
+    private void acceptPackets() {
         while (true) {
             try {
                 ClientPacket packet = (ClientPacket) input.readObject();
+
                 if (packet instanceof ClientDisconnectPacket) {
-                    server.connections.remove(this);
+                    server.removeConnection(this);
                     return;
                 }
 
@@ -44,31 +55,33 @@ public class ConnectionHandler implements Runnable {
                     continue;
                 }
 
-                if (packet instanceof ClientLetterPacket letterPacket) {
-                    output.writeObject(new ServerLetterPacket(letterPacket.getLetter(), server.checkLetter(letterPacket.getLetter())));
-                    continue;
-                }
-
-                if (packet instanceof ClientGuessPacket guessPacket) {
-                    if(server.checkWin(this, guessPacket.getGuess())) {
-                        server.connections.stream().forEach(connectionHandler -> {
-                            try {
-                                connectionHandler.output.writeObject(new ServerWinPacket(true));
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
-                    }
-                    continue;
-                }
-
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (ClassNotFoundException e) {
+                handleClientLetterPacket(packet);
+                handleClientGuessPacket(packet);
+            } catch (ClassNotFoundException | IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+    }
 
+    private void handleClientLetterPacket(ClientPacket packet) throws IOException {
+        if (packet instanceof ClientLetterPacket letterPacket) {
+            output.writeObject(new ServerLetterPacket(letterPacket.getLetter(), server.checkLetter(letterPacket.getLetter())));
+        }
+    }
+
+    private void handleClientGuessPacket(ClientPacket packet) throws IOException {
+        if (packet instanceof ClientGuessPacket guessPacket) {
+            if (server.checkWin(this, guessPacket.getGuess())) {
+                this.output.writeObject(new ServerWinPacket(true));
+            }
+        }
+    }
+
+    public void sendPacket(Object packet) {
+        try {
+            output.writeObject(packet);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }
