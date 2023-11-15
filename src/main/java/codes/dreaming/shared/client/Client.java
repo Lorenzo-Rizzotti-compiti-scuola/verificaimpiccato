@@ -125,6 +125,11 @@ public class Client implements Runnable {
             builder.setCharAt(index, packet.getLetter());
         }
         this.stateLabel.setText(builder.toString());
+
+        // This automatically sends a guess if the word is guessed, technically this should be done on the server side but this is a quick fix
+        if (builder.indexOf("_") == -1) {
+            sendPacket(new ClientGuessPacket(builder.toString()));
+        }
     }
 
     private void handleServerWinPacket(ServerWinPacket packet) {
