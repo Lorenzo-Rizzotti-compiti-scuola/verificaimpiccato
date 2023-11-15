@@ -6,6 +6,7 @@ import codes.dreaming.shared.client.packets.ClientGuessPacket;
 import codes.dreaming.shared.client.packets.ClientLetterPacket;
 import codes.dreaming.shared.server.packets.ServerLetterPacket;
 import codes.dreaming.shared.server.packets.ServerWinPacket;
+import codes.dreaming.shared.server.packets.ServerWrongGuessPacket;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -73,6 +74,8 @@ public class ConnectionHandler implements Runnable {
         if (packet instanceof ClientGuessPacket guessPacket) {
             if (server.checkWin(this, guessPacket.getGuess())) {
                 this.output.writeObject(new ServerWinPacket(true));
+            }else{
+                this.output.writeObject(new ServerWrongGuessPacket());
             }
         }
     }

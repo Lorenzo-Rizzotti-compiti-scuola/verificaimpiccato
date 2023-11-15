@@ -110,6 +110,8 @@ public class Client implements Runnable {
             handleServerLetterPacket(letterPacket);
         } else if (packet instanceof ServerWinPacket winPacket) {
             handleServerWinPacket(winPacket);
+        } else if (packet instanceof ServerWrongGuessPacket wrongGuessPacket) {
+            handleWrongGuessPacket(wrongGuessPacket);
         }
     }
 
@@ -131,5 +133,9 @@ public class Client implements Runnable {
         } else {
             stateLabel.setText("You lost!");
         }
+    }
+
+    private void handleWrongGuessPacket(ServerWrongGuessPacket packet) {
+        stateLabel.setText("Wrong guess!");
     }
 }

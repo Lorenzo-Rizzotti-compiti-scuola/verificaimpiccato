@@ -45,7 +45,9 @@ public class Server implements Runnable {
 
     public boolean checkWin(ConnectionHandler handler, String guess) {
         boolean isWin = guess.equals(wordToGuess);
-        broadcastWinningInfo(handler, isWin);
+        if(isWin){
+            broadcastWinningInfo(handler);
+        }
         return isWin;
     }
 
@@ -80,9 +82,8 @@ public class Server implements Runnable {
         return index;
     }
 
-    private void broadcastWinningInfo(ConnectionHandler handler, boolean isWin) {
-        System.out.printf("Checking win for '%s'%n", isWin);
-        this.broadcast(handler, new ServerWinPacket(isWin));
+    private void broadcastWinningInfo(ConnectionHandler handler) {
+        this.broadcast(handler, new ServerWinPacket(false));
     }
 
     private void handleNewConnection(Socket client) throws IOException {
