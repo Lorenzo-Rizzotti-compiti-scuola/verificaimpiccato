@@ -18,42 +18,89 @@ import java.awt.*;
 import java.io.IOException;
 
 public class Main {
+    private Terminal terminal;
+    private Screen screen;
+    private BasicWindow window;
+    private MultiWindowTextGUI gui;
+
     public static void main(String[] args) throws IOException {
-        Terminal terminal = new DefaultTerminalFactory().createTerminal();
+        new Main().run();
+    }
 
-        Screen screen = new TerminalScreen(terminal);
-        screen.startScreen();
+    private void run() throws IOException {
+        setupOutput();
+        initializeGUI();
+        setupContent();
+    }
 
-        final BasicWindow window = new BasicWindow();
+    private void setupOutput() throws IOException {
+        this.terminal = new DefaultTerminalFactory().createTerminal();
+        this.screen = new TerminalScreen(terminal);
+        this.screen.startScreen();
+    }
 
+    private void initializeGUI() {
+        this.gui = new MultiWindowTextGUI(screen, new DefaultWindowManager(), new EmptySpace(TextColor.ANSI.BLUE));
+        this.window = new BasicWindow();
+    }
 
-        MultiWindowTextGUI gui = new MultiWindowTextGUI(screen, new DefaultWindowManager(), new EmptySpace(TextColor.ANSI.BLUE));
+    private void setupContent() {
+        Panel contentPanel = createContentPanel();
+        Panel mainPanel = setupMainPanel(contentPanel);
+        window.setComponent(mainPanel);
+        gui.addWindowAndWait(window);
+    }
 
+    private Panel createContentPanel() {
         Panel contentPanel = new Panel(new GridLayout(2));
-        Button serverButton = new Button("Start Server", () -> {
+        createButtons(contentPanel);
+        return contentPanel;
+    }
+
+    private void createButtons(Panel contentPanel) {
+        Button serverButton = createServerButton();
+        Button clientButton = createClientButton();
+        addButtonsToPanel(serverButton, clientButton, contentPanel);
+    }
+
+    private Button createServerButton() {
+        return new Button("Start Server", () -> {
             Window serverWindow = ServerGui.createServerWindow();
             gui.addWindowAndWait(serverWindow);
         });
+    }
 
-        Button clientButton = new Button("Start Client", () -> {
+    private Button createClientButton() {
+        return new Button("Start Client", () -> {
             Window clientWindow = ClientGui.createClientWindow(gui);
             gui.addWindowAndWait(clientWindow);
         });
+    }
 
-        // Add the buttons to the content panel
+    private void addButtonsToPanel(Button serverButton, Button clientButton, Panel contentPanel) {
         contentPanel.addComponent(serverButton);
         contentPanel.addComponent(clientButton);
+    }
 
-        // Create an empty space around the content panel to center it
-        Panel mainPanel = new Panel(new BorderLayout());
-        mainPanel.addComponent(new EmptySpace(), BorderLayout.Location.TOP);
-        mainPanel.addComponent(new EmptySpace(), BorderLayout.Location.LEFT);
+    private Panel setupMainPanel(Panel contentPanel) {
+        Panel mainPanel = mainPanelWithBorderLayout();
+        addComponentToMainPanel(contentPanel, mainPanel);
+        return mainPanel;
+    }
+
+    private Panel mainPanelWithBorderLayout() {
+        return new Panel(new BorderLayout());
+    }
+
+    private void addComponentToMainPanel(Panel contentPanel, Panel mainPanel) {
+        addEmptySpaceToPanel(mainPanel, BorderLayout.Location.TOP);
+        addEmptySpaceToPanel(mainPanel, BorderLayout.Location.LEFT);
         mainPanel.addComponent(contentPanel, BorderLayout.Location.CENTER);
-        mainPanel.addComponent(new EmptySpace(), BorderLayout.Location.RIGHT);
-        mainPanel.addComponent(new EmptySpace(), BorderLayout.Location.BOTTOM);
+        addEmptySpaceToPanel(mainPanel, BorderLayout.Location.RIGHT);
+        addEmptySpaceToPanel(mainPanel, BorderLayout.Location.BOTTOM);
+    }
 
-        window.setComponent(mainPanel);
-
-        gui.addWindowAndWait(window);
+    private void addEmptySpaceToPanel(Panel panel, BorderLayout.Location location) {
+        panel.addComponent(new EmptySpace(), location);
     }
 }
