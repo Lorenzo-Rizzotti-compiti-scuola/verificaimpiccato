@@ -6,7 +6,7 @@ public class ServerStartPacket extends ServerPacket {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private static Integer wordLength;
+    private final Integer wordLength;
 
     public ServerStartPacket(Integer wordLength) {
         this.wordLength = wordLength;

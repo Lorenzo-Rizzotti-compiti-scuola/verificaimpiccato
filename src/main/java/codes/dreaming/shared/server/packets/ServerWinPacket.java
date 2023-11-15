@@ -6,7 +6,7 @@ public class ServerWinPacket extends ServerPacket {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    public Boolean youWin;
+    public final Boolean youWin;
 
     public ServerWinPacket(Boolean youWin) {
         this.youWin = youWin;

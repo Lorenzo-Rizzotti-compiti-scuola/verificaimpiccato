@@ -7,8 +7,8 @@ public class ServerLetterPacket extends ServerPacket {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    public char letter;
-    public ArrayList<Integer> index;
+    public final char letter;
+    public final ArrayList<Integer> index;
 
     public ServerLetterPacket(char letter, ArrayList<Integer> index) {
         this.letter = letter;
